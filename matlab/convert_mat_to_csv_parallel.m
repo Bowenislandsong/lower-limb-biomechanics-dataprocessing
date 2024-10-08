@@ -1,8 +1,8 @@
-## Convert .mat files to .csv files in parallel
-## this function is run in MATLAB and converts all .mat files in a folder to .csv files in parallel. It respects the folder structure and saves the .csv files in the same location as the .mat files.
-## use the following to copy data from and to the server
-## rsync -avz --progress --include="*/*/{fp,imu}/*.mat" --include="*/" --exclude="*" champange.usc.edu:/media/champagne/lower_limb_dataset/ ./
-## rsync -avz --progress --include="*/" --include="*/*/{fp,imu,gcRight,gcLeft}/*.csv" --exclude="" ./ champange.usc.edu:/media/champagne/lower_limb_dataset/
+%% Convert .mat files to .csv files in parallel
+% this function is run in MATLAB and converts all .mat files in a folder to .csv files in parallel. It respects the folder structure and saves the .csv files in the same location as the .mat files.
+% use the following to copy data from and to the server
+% rsync -avz --progress --include="*/*/{fp,imu}/*.mat" --include="*/" --exclude="*" champange.usc.edu:/media/champagne/lower_limb_dataset/ ./
+% rsync -avz --progress --include="*/" --include="*/*/{fp,imu,gcRight,gcLeft}/*.csv" --exclude="" ./ champange.usc.edu:/media/champagne/lower_limb_dataset/
 
 function convert_mat_to_csv_parallel(folder_path, num_workers)
     % Check if folder exists
