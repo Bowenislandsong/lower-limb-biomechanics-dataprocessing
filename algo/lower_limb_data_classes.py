@@ -62,7 +62,7 @@ class LowerLimbData:
             weight=weight
         )
 
-def combine_data(parent_path: str, locomotion_modes: Optional[List[str]] = None, signal_sources: Optional[List[str]] = None) -> LowerLimbData:
+def combine_data(parent_path: str, locomotion_modes: Optional[List[str]] = None, signal_sources: Optional[List[str]] = None, num_sessions: int = float('inf')) -> LowerLimbData:
     if locomotion_modes is None:
         locomotion_modes = ['levelground', 'ramp', 'stair', 'treadmill']
     if signal_sources is None:
@@ -81,21 +81,24 @@ def combine_data(parent_path: str, locomotion_modes: Optional[List[str]] = None,
         signal_data = pd.DataFrame()
         files = [f for f in os.listdir(dir_path) if f.endswith(".csv")]
 
-        for file in files:  # join per session
+        for file in files[:min(num_sessions,len(files))]:  # join per session
             file_path = os.path.join(dir_path, file)
             print("processing", file_path)
             result = read_and_process_file(file_path, file.removesuffix('.csv'))
-            if signal_source == 'fp':
+            if signal_source in ['fp','gcLeft', 'gcRight']:
                 result = result[::5]
             signal_data = pd.concat([signal_data, result], axis=0)
-        
-        return locomotion_mode, signal_source, signal_data
+        if signal_source in ['gcLeft', 'gcRight']:
+            signal_data.columns = [signal_source + "_" + col for col in signal_data.columns]
+
+        signal_data["signal_source"] = signal_source
+        return locomotion_mode, signal_data
 
     with ThreadPoolExecutor() as executor:
         futures = [executor.submit(process_signal_source, lm, ss) for lm, ss in product(locomotion_modes, signal_sources)]
         results = [future.result() for future in futures]
 
-    for locomotion_mode, signal_source, signal_data in results:
+    for locomotion_mode, signal_data in results:
         persignal_data = pd.DataFrame()
         persignal_data = pd.merge(persignal_data, signal_data.drop(columns=['session']), left_index=True, right_index=True, how='outer') if not persignal_data.empty else signal_data
         persignal_data['locomotion_mode'] = locomotion_mode
@@ -104,8 +107,8 @@ def combine_data(parent_path: str, locomotion_modes: Optional[List[str]] = None,
 
     return combined_person_data
 
-if __name__ == "__main__":
-    base_path = "./dataset/raw/"
+def get_all_data():
+    base_path = "/media/champagne/lower_limb_dataset/"
     subject_paths = glob.glob(os.path.join(base_path, "AB*/*_*_*"))
 
     for file_path in subject_paths:
@@ -113,7 +116,17 @@ if __name__ == "__main__":
         date = file_path.split('/')[-1]
 
         data = combine_data(file_path, signal_sources=['imu', 'gcLeft', 'gcRight'])
-        data.to_pickle(f"{subject_id}_{date}_IMU.pkl")
+        data.to_pickle(f"{base_path}{subject_id}_{date}_IMU.pkl")
         
         data = combine_data(file_path, signal_sources=['fp'])
-        data.to_pickle(f"{subject_id}_{date}_GRF.pkl")
+        data.to_pickle(f"{base_path}{subject_id}_{date}_GRF.pkl")
+
+if __name__ == "__main__":
+    get_all_data()
+    # example_path = "./dataset/raw/AB06/10_09_18/"
+    # data = combine_data(example_path)
+    # data.to_pickle("AB06_10_09_18.pkl")
+    # data = combine_data(example_path, signal_sources=['fp'])
+    # data.to_pickle("AB06_10_09_18_GRF.pkl")
+    # data = combine_data(example_path, signal_sources=['imu', 'gcLeft', 'gcRight'])
+    # data.to_pickle("AB06_10_09_18_IMU.pkl")
