@@ -1,6 +1,7 @@
 %% Convert .mat files to .csv files in parallel
 % this function is run in MATLAB and converts all .mat files in a folder to .csv files in parallel. It respects the folder structure and saves the .csv files in the same location as the .mat files.
 % use the following to copy data from and to the server
+% convert_mat_to_csv_parallel("/home/bowenson/Documents/MATLAB/locomotion_dataset",5)
 % rsync -avz --progress --include="*/*/{fp,imu}/*.mat" --include="*/" --exclude="*" champange.usc.edu:/media/champagne/lower_limb_dataset/ ./
 % rsync -avz --progress --include="*/" --include="*/*/{fp,imu,gcRight,gcLeft}/*.csv" --exclude="" ./ champange.usc.edu:/media/champagne/lower_limb_dataset/
 
@@ -21,7 +22,11 @@ function convert_mat_to_csv_parallel(folder_path, num_workers)
         file_path = files(i).folder;
         file_name = files(i).name;
         full_file_path = fullfile(file_path, file_name);
-        fprintf(full_file_path,'\n');
+        parts = strsplit(full_file_path, '/');
+        if ~ismember(parts{end-1}, {'fp', 'imu', 'gcLeft', 'gcRight'})
+            continue;
+        end
+        disp(full_file_path);
         
         % Check if file is a .mat file
         if endsWith(file_name, '.mat')
