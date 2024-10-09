@@ -108,7 +108,7 @@ def combine_data(parent_path: str, locomotion_modes: Optional[List[str]] = None,
     return combined_person_data
 
 def get_all_data():
-    base_path = "/media/champagne/lower_limb_dataset/"
+    base_path = "/media/champagne/lower_limb_dataset/v2/"
     subject_paths = glob.glob(os.path.join(base_path, "AB*/*_*_*"))
 
     for file_path in subject_paths:
@@ -122,11 +122,11 @@ def get_all_data():
         data.to_pickle(f"{base_path}{subject_id}_{date}_GRF.pkl")
 
 if __name__ == "__main__":
-    get_all_data()
-    # example_path = "./dataset/raw/AB06/10_09_18/"
-    # data = combine_data(example_path)
-    # data.to_pickle("AB06_10_09_18.pkl")
-    # data = combine_data(example_path, signal_sources=['fp'])
-    # data.to_pickle("AB06_10_09_18_GRF.pkl")
-    # data = combine_data(example_path, signal_sources=['imu', 'gcLeft', 'gcRight'])
-    # data.to_pickle("AB06_10_09_18_IMU.pkl")
+    # get_all_data()
+    example_path = "./dataset/raw/AB06/10_09_18/"
+    data = combine_data(example_path, signal_sources=['fp'])
+    data.to_pickle("AB06_10_09_18_GRF.pkl")
+    data = combine_data(example_path, signal_sources=['gcLeft', 'gcRight'])
+    data.to_pickle("AB06_10_09_18_GC.pkl")
+    data = combine_data(example_path, signal_sources=['imu'])
+    data.to_pickle("AB06_10_09_18_IMU.pkl")
