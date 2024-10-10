@@ -1,7 +1,5 @@
 import pandas as pd
-from concurrent.futures import ThreadPoolExecutor
 from scipy.signal import find_peaks
-import itertools
 import numpy as np
 from scipy.signal import find_peaks
 import os
@@ -69,17 +67,24 @@ def step_segmentation(data,session_name,indicator_data,window_size=220,
     if heel_strikes.shape != (n_speeds, n_steps):
         print(f"Error: heel_strikes shape is {heel_strikes.shape}, expected {(n_speeds, n_steps)}")
         return None
+    strike_durations = np.diff(heel_strikes, axis=1).mean(axis=1).astype(int)
 
     for speed_idx in range(n_speeds):
         for col_idx, col in enumerate(include_columns):
             for step_idx in range(n_steps):
                 for dim_idx, dim in enumerate(dims):
-                    idx = heel_strikes[speed_idx][step_idx]
-                    ts = indicator_data.index[idx]
-                    col_data = get_signal(data,session_name,f"{col}{dim}")
-                    closest_idx = np.argmin(np.abs(col_data.index.to_numpy() - ts))-1
-                    segment = col_data.values[closest_idx:closest_idx + window_size].tolist()
-                    segmented_data[speed_idx,col_idx,step_idx,dim_idx] = segment
+                    idx = heel_strikes[speed_idx][step_idx]                                  # Get the index of the current heel strike split into speeds and steps
+                    ts = indicator_data.index[idx]                                           # Get the timestamp of the heel strike
+                    te = indicator_data.index[idx+strike_durations[speed_idx]]               # Get the timestamp of the end of the stride
+                    col_data = get_signal(data, session_name, f"{col}{dim}")                 # Get the signal data for the specified column and dimension
+                    closest_start = np.argmin(np.abs(col_data.index.to_numpy() - ts)) - 1    # Find the closest start index to the heel strike
+                    closest_end = np.argmin(np.abs(col_data.index.to_numpy() - te)) + 1      # Find the closest end index to the end of the stride
+                    segment = col_data.values[closest_start:closest_start + window_size]     # Extract the segment of data for the window size
+                    if closest_end - closest_start < len(segment):
+                        segment[closest_end - closest_start:] = 0                            # Zero-pad the segment if it is shorter than the window size
+                        segment = np.roll(segment, (len(segment)-closest_end + closest_start)//2)                            # Shift the segment to the right
+
+                    segmented_data[speed_idx, col_idx, step_idx, dim_idx] = segment          # Store the segment in the segmented data array
     # 1 person, 4 speeds, 4 signals, 15 steps, 3 dimentions, time window
     return segmented_data.squeeze()
 
@@ -106,37 +111,57 @@ def generate_plots_for_segmented_data(segmented_imus, segmented_grfs, window_siz
     plt.tight_layout()
     plt.savefig(save_path)
 
+def process_subject(imu_path, grf_path):
+    print(f"Processing {imu_path}, {grf_path}")
+    imu_data = pd.read_pickle(imu_path)
+    grf_data = pd.read_pickle(grf_path)
+    for session in get_unique_sessions(imu_data, session_title='session', prefix='treadmill'):
+        window_size = 300
+        rgc_data = get_right_gc(imu_data, session)
+
+        print("Processing session:", session)
+        segmented_imus = step_segmentation(imu_data, session, rgc_data, window_size=window_size)
+        segmented_grfs = step_segmentation(grf_data, session, rgc_data, window_size=window_size, include_columns=['Treadmill_R_v'], dims=['x', 'y', 'z'])
+        if segmented_imus is None or segmented_grfs is None:
+            print(f"Error processing session {session} from {imu_path}")
+            continue
+        titles = ['Shank Accel', 'Shank Gyro', 'Trunk Accel', 'Trunk Gyro', 'GRF']
+        save_path = f"./local_results/{imu_path.split('/')[-1].replace('_IMU.pkl', '')}{session}.png"
+        generate_plots_for_segmented_data(segmented_imus, segmented_grfs, window_size, titles, save_path)
+        # save session data
+        save_path = f"./local_results/{imu_path.split('/')[-1].replace('_IMU.pkl', '')}{session}.npz"
+        np.savez(save_path, imu=segmented_imus, grf=segmented_grfs)
+
 def get_all_subjects():
     # base_path = "./dataset/pandas/"
     base_path = "/media/champagne/lower_limb_dataset/v2/"
     imu_paths = glob.glob(os.path.join(base_path, "AB*_IMU.pkl"))
     grf_paths = [p.replace('IMU','GRF') for p in imu_paths]
-
-    def process_subject(imu_path, grf_path):
-        print(f"Processing {imu_path}, {grf_path}")
-        imu_data = pd.read_pickle(imu_path)
-        grf_data = pd.read_pickle(grf_path)
-        for session in get_unique_sessions(imu_data, session_title='session', prefix='treadmill'):
-            window_size = 400
-            rgc_data = get_right_gc(imu_data, session)
-
-            print("Processing session:", session, rgc_data.shape)
-            segmented_imus = step_segmentation(imu_data, session, rgc_data, window_size=window_size)
-            segmented_grfs = step_segmentation(grf_data, session, rgc_data, window_size=window_size, include_columns=['Treadmill_R_v'], dims=['x', 'y', 'z'])
-            if segmented_imus is None or segmented_grfs is None:
-                print(f"Error processing session {session} from {imu_path}")
-                continue
-            titles = ['Shank Accel', 'Shank Gyro', 'Trunk Accel', 'Trunk Gyro', 'GRF']
-            save_path = f"./local_results/{imu_path.split('/')[-1].replace('_IMU.pkl', '')}{session}.png"
-            generate_plots_for_segmented_data(segmented_imus, segmented_grfs, window_size, titles, save_path)
-            # save session data
-            save_path = f"./local_results/{imu_path.split('/')[-1].replace('_IMU.pkl', '')}{session}.npz"
-            np.savez(save_path, imu=segmented_imus, grf=segmented_grfs)
-
     Parallel(n_jobs=-1)(delayed(process_subject)(imu_path, grf_path) for imu_path, grf_path in zip(imu_paths, grf_paths))
 
+def get_sample_subject():
+    imu_path = "./dataset/pandas/AB06_10_09_18_IMU.pkl"
+    grf_path = "./dataset/pandas/AB06_10_09_18_GRF.pkl"
+    imu_data = pd.read_pickle(imu_path)
+    grf_data = pd.read_pickle(grf_path)
+    for session in get_unique_sessions(imu_data, session_title='session', prefix='treadmill'):
+        rgc_data = get_right_gc(imu_data, session)
+        window_size = 300
+        print("Processing session:", session, rgc_data.shape)
+        segmented_imus = step_segmentation(imu_data, session, rgc_data, window_size=window_size)
+        segmented_grfs = step_segmentation(grf_data, session, rgc_data, window_size=window_size, include_columns=['Treadmill_R_v'], dims=['x', 'y', 'z'])
+        if segmented_imus is None or segmented_grfs is None:
+            print(f"Error processing session {session} from {imu_path}")
+            continue
+        titles = ['Shank Accel', 'Shank Gyro', 'Trunk Accel', 'Trunk Gyro', 'GRF']
+        save_path = f"./{imu_path.split('/')[-1].replace('_IMU.pkl', '')}{session}.png"
+        generate_plots_for_segmented_data(segmented_imus, segmented_grfs, window_size, titles, save_path)
+        # save session data
+        save_path = f"./{imu_path.split('/')[-1].replace('_IMU.pkl', '')}{session}.npz"
+        np.savez(save_path, imu=segmented_imus, grf=segmented_grfs)
 
 if __name__ == '__main__':
     get_all_subjects()
+    # get_sample_subject()
 
 
