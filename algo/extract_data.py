@@ -115,7 +115,7 @@ def process_subject(imu_path, grf_path):
     print(f"Processing {imu_path}, {grf_path}")
     imu_data = pd.read_pickle(imu_path)
     grf_data = pd.read_pickle(grf_path)
-    for session in get_unique_sessions(imu_data, session_title='session', prefix='treadmill'):
+    for session in get_unique_sessions(imu_data, session_title='session', prefix='Treadmill').tolist() + get_unique_sessions(imu_data, session_title='session', prefix='treadmill').tolist():
         window_size = 300
         rgc_data = get_right_gc(imu_data, session)
 
@@ -126,24 +126,25 @@ def process_subject(imu_path, grf_path):
             print(f"Error processing session {session} from {imu_path}")
             continue
         titles = ['Shank Accel', 'Shank Gyro', 'Trunk Accel', 'Trunk Gyro', 'GRF']
-        save_path = f"./local_results/{imu_path.split('/')[-1].replace('_IMU.pkl', '')}{session}.png"
+        save_path = f"./local_results/{imu_path.split('/')[-1].replace('_IMU.pkl', '')}{session.lower()}.png"
         generate_plots_for_segmented_data(segmented_imus, segmented_grfs, window_size, titles, save_path)
         # save session data
-        save_path = f"./local_results/{imu_path.split('/')[-1].replace('_IMU.pkl', '')}{session}.npz"
+        save_path = f"./local_results/{imu_path.split('/')[-1].replace('_IMU.pkl', '')}{session.lower()}.npz"
         np.savez(save_path, imu=segmented_imus, grf=segmented_grfs)
 
 def get_all_subjects():
     # base_path = "./dataset/pandas/"
-    base_path = "/media/champagne/lower_limb_dataset/v2/"
+    base_path = "/media/champagne/lower_limb_dataset/"
     imu_paths = glob.glob(os.path.join(base_path, "AB*_IMU.pkl"))
     grf_paths = [p.replace('IMU','GRF') for p in imu_paths]
     Parallel(n_jobs=-1)(delayed(process_subject)(imu_path, grf_path) for imu_path, grf_path in zip(imu_paths, grf_paths))
 
 def get_sample_subject():
-    imu_path = "./dataset/pandas/AB06_10_09_18_IMU.pkl"
-    grf_path = "./dataset/pandas/AB06_10_09_18_GRF.pkl"
+    imu_path = "./dataset/pandas/AB25_01_20_2019_IMU.pkl"
+    grf_path = "./dataset/pandas/AB25_01_20_2019_GRF.pkl"
     imu_data = pd.read_pickle(imu_path)
     grf_data = pd.read_pickle(grf_path)
+    print(imu_data['session'].unique())
     for session in get_unique_sessions(imu_data, session_title='session', prefix='treadmill'):
         rgc_data = get_right_gc(imu_data, session)
         window_size = 300
