@@ -59,10 +59,14 @@ def package_npz_files():
     for f in files:
         fname = f.split('/')[-1].replace('.npz','')
         data = np.load(f)
-        data = np.concatenate((data['imu'].transpose(1,0,2,3,4), np.expand_dims(data['grf'], axis=0)), axis=0)
+        id,session = extract_parts(fname)
+        body_weight = subject_info.loc[subject_info['Subject'] == id]['Weight'].values[0]*2.20462
+        data = np.concatenate((data['imu'].transpose(1,0,2,3,4), np.expand_dims(data['grf'], axis=0)/body_weight), axis=0)
+
         result = np.concatenate((result, data), axis=1) if result.size else data
 
-        id,session = extract_parts(fname)
+
+
         for sp in [0.5,1.2,1.55,0.85]: # speeds in m/s
             session_info = pd.DataFrame(subject_info.loc[subject_info['Subject'] == id].to_dict(orient='records'))
             session_info['speed'] = sp+int(session.split('_')[0])*0.05
